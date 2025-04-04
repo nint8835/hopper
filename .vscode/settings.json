@@ -1,0 +1,9 @@
+{
+    "editor.formatOnSave": true,
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "gopls": {
+        "formatting.local": "github.com/nint8835/hopper"
+    }
+}
