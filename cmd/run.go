@@ -1,14 +1,19 @@
 package cmd
 
 import (
+	"database/sql"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
 
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/spf13/cobra"
+	_ "modernc.org/sqlite"
 
 	"github.com/nint8835/hopper/pkg/bot"
 	"github.com/nint8835/hopper/pkg/config"
+	"github.com/nint8835/hopper/pkg/database/migrations"
 )
 
 var runCmd = &cobra.Command{
@@ -17,6 +22,16 @@ var runCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg, err := config.Load()
 		checkErr(err, "Failed to load config")
+
+		db, err := sql.Open("sqlite", cfg.DatabasePath)
+		checkErr(err, "Failed to connect to database")
+
+		migrationRunner, err := migrations.New(db)
+		checkErr(err, "Failed to create migration runner")
+		err = migrationRunner.Up()
+		if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			checkErr(err, "Failed to run migrations")
+		}
 
 		botInst, err := bot.New(cfg)
 		checkErr(err, "Failed to create bot instance")

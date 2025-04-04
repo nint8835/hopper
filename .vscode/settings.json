@@ -5,5 +5,10 @@
     },
     "gopls": {
         "formatting.local": "github.com/nint8835/hopper"
+    },
+    "files.insertFinalNewline": true,
+    "sqltools.format": {
+        "linesBetweenQueries": 2,
+        "reservedWordCase": "upper"
     }
 }
