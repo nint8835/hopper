@@ -33,7 +33,7 @@ var runCmd = &cobra.Command{
 			checkErr(err, "Failed to run migrations")
 		}
 
-		botInst, err := bot.New(cfg)
+		botInst, err := bot.New(cfg, db)
 		checkErr(err, "Failed to create bot instance")
 
 		go func() {
