@@ -7,6 +7,11 @@ RETURNING *;
 SELECT *
 FROM feeds;
 
+-- name: GetFeedByUrl :one
+SELECT *
+FROM feeds
+WHERE feed_url = ?;
+
 -- name: GetPosts :many
 SELECT post_guid
 FROM posts

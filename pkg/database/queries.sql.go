@@ -73,6 +73,25 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) error {
 	return err
 }
 
+const getFeedByUrl = `-- name: GetFeedByUrl :one
+SELECT id, title, description, url, feed_url
+FROM feeds
+WHERE feed_url = ?
+`
+
+func (q *Queries) GetFeedByUrl(ctx context.Context, feedUrl string) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, getFeedByUrl, feedUrl)
+	var i Feed
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Url,
+		&i.FeedUrl,
+	)
+	return i, err
+}
+
 const getFeeds = `-- name: GetFeeds :many
 SELECT id, title, description, url, feed_url
 FROM feeds

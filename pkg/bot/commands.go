@@ -2,14 +2,16 @@ package bot
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/davecgh/go-spew/spew"
 	"pkg.nit.so/switchboard"
 
 	"github.com/nint8835/hopper/pkg/database"
+	"github.com/nint8835/hopper/pkg/feeds"
 	"github.com/nint8835/hopper/pkg/utils"
 )
 
@@ -25,13 +27,57 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 
 	feed, feedUrl, err := b.watcher.DiscoverFeed(args.URL)
 	if err != nil {
-		// TODO: Better response for when there is no feed
+		if errors.Is(err, feeds.ErrNoFeedFound) {
+			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+					{
+						Title:       "No feed found",
+						Description: "No feed found at that URL. If the URL is correct, try providing the URL directly to the site's feed.",
+						Color:       0xffbc00,
+					},
+				}),
+			})
+			return
+		} else {
+			slog.Error("Failed to discover feed", "error", err)
+			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+				Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+					{
+						Title:       "Failed to discover feed",
+						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+						Color:       0xff0000,
+					},
+				}),
+			})
+			return
+		}
+	}
+
+	_, err = b.Queries.GetFeedByUrl(context.Background(), feedUrl)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		slog.Error("Failed to check if feed exists", "error", err)
 		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: utils.PtrTo("Failed to discover feed: " + err.Error()),
+			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+				{
+					Title:       "Failed to check if feed exists",
+					Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+					Color:       0xff0000,
+				},
+			}),
+		})
+		return
+	} else if err == nil {
+		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+				{
+					Title:       "Feed already exists",
+					Description: "A feed with that URL already exists.",
+					Color:       0xffbc00,
+				},
+			}),
 		})
 		return
 	}
-	feed.Items = nil
 
 	siteLink := feed.Link
 	if siteLink == "" && len(feed.Links) > 0 {
@@ -47,10 +93,45 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 			FeedUrl:     feedUrl,
 		},
 	)
+	if err != nil {
+		slog.Error("Failed to create feed", "error", err)
+		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+				{
+					Title:       "Failed to create feed",
+					Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+					Color:       0xff0000,
+				},
+			}),
+		})
+		return
+	}
 
-	// TODO: Respond with an embed
 	_, err = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: utils.PtrTo(fmt.Sprintf("```\n%s\n```", spew.Sdump(newFeed))),
+		Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+			{
+				Title: "Feed added!",
+				Color: 0x44b649,
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:  "Title",
+						Value: feed.Title,
+					},
+					{
+						Name:  "Description",
+						Value: feed.Description,
+					},
+					{
+						Name:  "Site URL",
+						Value: siteLink,
+					},
+					{
+						Name:  "Feed URL",
+						Value: fmt.Sprintf("`%s`", newFeed.FeedUrl),
+					},
+				},
+			},
+		}),
 	})
 	if err != nil {
 		slog.Error("Failed to respond to interaction", "error", err)
