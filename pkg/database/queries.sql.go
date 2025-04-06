@@ -9,13 +9,33 @@ import (
 	"context"
 )
 
-const test = `-- name: Test :one
-SELECT 1
+const createFeed = `-- name: CreateFeed :one
+INSERT INTO feeds (title, description, url, feed_url)
+VALUES (?, ?, ?, ?)
+RETURNING id, title, description, url, feed_url
 `
 
-func (q *Queries) Test(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, test)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+type CreateFeedParams struct {
+	Title       string
+	Description string
+	Url         string
+	FeedUrl     string
+}
+
+func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, createFeed,
+		arg.Title,
+		arg.Description,
+		arg.Url,
+		arg.FeedUrl,
+	)
+	var i Feed
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Url,
+		&i.FeedUrl,
+	)
+	return i, err
 }
