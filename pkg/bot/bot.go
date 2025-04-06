@@ -39,6 +39,8 @@ func (b *Bot) Run() error {
 		return fmt.Errorf("error opening Discord connection: %w", err)
 	}
 
+	b.watcher.Start()
+
 	slog.Info("Discord bot running")
 
 	<-b.quitChan
@@ -52,8 +54,12 @@ func (b *Bot) Run() error {
 }
 
 func (b *Bot) Stop() {
+	slog.Debug("Stopping bot...")
+
 	b.quitChan <- struct{}{}
 	<-b.stoppedChan
+
+	b.watcher.Stop()
 }
 
 func New(cfg *config.Config, db *sql.DB) (*Bot, error) {

@@ -3,8 +3,9 @@ module github.com/nint8835/hopper
 go 1.24.1
 
 require (
+	github.com/JohannesKaufmann/html-to-markdown/v2 v2.3.1
 	github.com/bwmarrin/discordgo v0.28.1
-	github.com/davecgh/go-spew v1.1.1
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/joho/godotenv v1.5.1
 	github.com/kelseyhightower/envconfig v1.4.0
@@ -13,13 +14,15 @@ require (
 	github.com/spf13/cobra v1.9.1
 	modernc.org/sqlite v1.37.0
 	pkg.nit.so/switchboard v0.0.0-20240930133908-cf045dc997ba
+	tailscale.com v1.82.0
 )
 
 require (
 	cel.dev/expr v0.19.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/JohannesKaufmann/dom v0.2.0 // indirect
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
-	github.com/andybalholm/cascadia v1.3.1 // indirect
+	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

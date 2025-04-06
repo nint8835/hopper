@@ -1,13 +1,12 @@
 package bot
 
 import (
-	"cmp"
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/davecgh/go-spew/spew"
-	"golang.org/x/exp/slog"
 	"pkg.nit.so/switchboard"
 
 	"github.com/nint8835/hopper/pkg/database"
@@ -45,7 +44,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 			Title:       feed.Title,
 			Description: feed.Description,
 			Url:         siteLink,
-			FeedUrl:     cmp.Or(feed.FeedLink, feedUrl),
+			FeedUrl:     feedUrl,
 		},
 	)
 
@@ -56,6 +55,8 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 	if err != nil {
 		slog.Error("Failed to respond to interaction", "error", err)
 	}
+
+	go b.watcher.RefreshFeed(newFeed, true)
 }
 
 func (b *Bot) registerCommands() {

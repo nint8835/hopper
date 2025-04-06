@@ -13,12 +13,13 @@ import (
 )
 
 type Config struct {
-	LogLevel         string `default:"info" split_words:"true"`
-	DatabasePath     string `default:"hopper.db" split_words:"true"`
-	DiscordAppId     string `split_words:"true"`
-	DiscordToken     string `split_words:"true"`
-	DiscordGuildId   string `split_words:"true"`
-	DiscordChannelId string `split_words:"true"`
+	LogLevel         string        `default:"info" split_words:"true"`
+	DatabasePath     string        `default:"hopper.db" split_words:"true"`
+	DiscordAppId     string        `split_words:"true"`
+	DiscordToken     string        `split_words:"true"`
+	DiscordGuildId   string        `split_words:"true"`
+	DiscordChannelId string        `split_words:"true"`
+	PollInterval     time.Duration `default:"1h" split_words:"true"`
 }
 
 func Load() (*Config, error) {
