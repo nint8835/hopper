@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/bwmarrin/discordgo"
 	"pkg.nit.so/switchboard"
@@ -39,7 +38,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 			})
 			return
 		} else {
-			slog.Error("Failed to discover feed", "error", err)
+			b.logger.Error("Failed to discover feed", "error", err)
 			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 				Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
 					{
@@ -55,7 +54,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 
 	_, err = b.Queries.GetFeedByUrl(context.Background(), feedUrl)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		slog.Error("Failed to check if feed exists", "error", err)
+		b.logger.Error("Failed to check if feed exists", "error", err)
 		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
 				{
@@ -94,7 +93,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		},
 	)
 	if err != nil {
-		slog.Error("Failed to create feed", "error", err)
+		b.logger.Error("Failed to create feed", "error", err)
 		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
 			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
 				{
@@ -134,7 +133,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		}),
 	})
 	if err != nil {
-		slog.Error("Failed to respond to interaction", "error", err)
+		b.logger.Error("Failed to respond to interaction", "error", err)
 	}
 
 	go b.watcher.RefreshFeed(newFeed, true)

@@ -17,6 +17,7 @@ type Bot struct {
 	Session *discordgo.Session
 	Queries *database.Queries
 
+	logger      *slog.Logger
 	watcher     *feeds.FeedWatcher
 	config      *config.Config
 	parser      *switchboard.Switchboard
@@ -41,10 +42,10 @@ func (b *Bot) Run() error {
 
 	b.watcher.Start()
 
-	slog.Info("Discord bot running")
+	b.logger.Info("Discord bot running")
 
 	<-b.quitChan
-	slog.Info("Stopping bot...")
+	b.logger.Info("Stopping bot...")
 
 	if err = b.Session.Close(); err != nil {
 		return fmt.Errorf("error closing Discord connection: %w", err)
@@ -54,8 +55,6 @@ func (b *Bot) Run() error {
 }
 
 func (b *Bot) Stop() {
-	slog.Debug("Stopping bot...")
-
 	b.quitChan <- struct{}{}
 	<-b.stoppedChan
 
@@ -71,6 +70,7 @@ func New(cfg *config.Config, db *sql.DB) (*Bot, error) {
 	bot := &Bot{
 		Session:     session,
 		Queries:     database.New(db),
+		logger:      slog.Default().With("component", "bot"),
 		watcher:     feeds.New(cfg, db, session),
 		config:      cfg,
 		parser:      &switchboard.Switchboard{},

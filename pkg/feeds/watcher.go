@@ -33,6 +33,8 @@ type FeedWatcher struct {
 }
 
 func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, error) {
+	f.logger.Debug("Posting item", "feed_id", feed.ID, "item_guid", item.GUID)
+
 	truncatedTitleForEmbed := truncate.String(item.Title, 253)
 	if truncatedTitleForEmbed != item.Title {
 		truncatedTitleForEmbed += "..."
@@ -103,6 +105,8 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 }
 
 func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
+	f.logger.Debug("Refreshing feed", "feed_id", feed.ID, "feed_url", feed.FeedUrl)
+
 	seenPosts, err := f.Queries.GetPosts(f.watcherCtx, feed.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get seen posts for feed %d: %w", feed.ID, err)
@@ -121,6 +125,8 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		if _, seen := seenPostsMap[item.GUID]; seen {
 			continue
 		}
+
+		f.logger.Debug("New item found", "feed_id", feed.ID, "item_guid", item.GUID)
 
 		var postMsgId string
 		if !isBackfill {

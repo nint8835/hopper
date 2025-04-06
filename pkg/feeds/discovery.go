@@ -2,7 +2,6 @@ package feeds
 
 import (
 	"fmt"
-	"log/slog"
 	"net/url"
 
 	"github.com/mmcdole/gofeed"
@@ -34,7 +33,7 @@ func (f *FeedWatcher) DiscoverFeed(targetUrl string) (*gofeed.Feed, string, erro
 
 	for _, route := range targetRoutes {
 		targetUrl := parsedUrl.JoinPath(route)
-		slog.Debug("Checking URL", "url", targetUrl.String())
+		f.logger.Debug("Checking for feed at URL", "url", targetUrl.String())
 
 		feed, err := f.parser.ParseURL(targetUrl.String())
 		if err == nil {
@@ -45,7 +44,7 @@ func (f *FeedWatcher) DiscoverFeed(targetUrl string) (*gofeed.Feed, string, erro
 	// If there still hasn't been a feed found, check all above routes with a trailing slash
 	for _, route := range targetRoutes {
 		targetUrl := parsedUrl.JoinPath(route + "/")
-		slog.Debug("Checking URL", "url", targetUrl.String())
+		f.logger.Debug("Checking for feed at URL", "url", targetUrl.String())
 
 		feed, err := f.parser.ParseURL(targetUrl.String())
 		if err == nil {
