@@ -15,4 +15,4 @@ jobs:
   build:
     uses: nint8835/workflows/.github/workflows/docker-build.yaml@main
     with:
-      image_name: nint8835/scribe
+      image_name: nint8835/hopper
