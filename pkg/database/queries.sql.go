@@ -73,6 +73,16 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) error {
 	return err
 }
 
+const deleteFeed = `-- name: DeleteFeed :exec
+DELETE FROM feeds
+WHERE id = ?
+`
+
+func (q *Queries) DeleteFeed(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteFeed, id)
+	return err
+}
+
 const getFeedByUrl = `-- name: GetFeedByUrl :one
 SELECT id, title, description, url, feed_url
 FROM feeds

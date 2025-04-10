@@ -175,6 +175,40 @@ func (b *Bot) handleListCommand(session *discordgo.Session, i *discordgo.Interac
 	}
 }
 
+type removeCommandArgs struct {
+	ID int `description:"ID of the feed to remove."`
+}
+
+func (b *Bot) handleRemoveCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args removeCommandArgs) {
+	err := b.Queries.DeleteFeed(context.Background(), int64(args.ID))
+	if err != nil {
+		b.logger.Error("Failed to delete feed", "error", err)
+		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+				{
+					Title:       "Failed to delete feed",
+					Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+					Color:       0xff0000,
+				},
+			}),
+		})
+		return
+	}
+
+	err = session.InteractionRespond(
+		i.Interaction,
+		&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: fmt.Sprintf("Feed with ID `%d` removed.", args.ID),
+			},
+		},
+	)
+	if err != nil {
+		b.logger.Error("Failed to respond to interaction", "error", err)
+	}
+}
+
 func (b *Bot) registerCommands() {
 	_ = b.parser.AddCommand(&switchboard.Command{
 		Name:        "add",
@@ -186,6 +220,12 @@ func (b *Bot) registerCommands() {
 		Name:        "list",
 		Description: "List all feeds",
 		Handler:     b.handleListCommand,
+		GuildID:     b.config.DiscordGuildId,
+	})
+	_ = b.parser.AddCommand(&switchboard.Command{
+		Name:        "remove",
+		Description: "Remove a feed",
+		Handler:     b.handleRemoveCommand,
 		GuildID:     b.config.DiscordGuildId,
 	})
 }

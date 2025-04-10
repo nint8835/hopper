@@ -3,6 +3,10 @@ INSERT INTO feeds (title, description, url, feed_url)
 VALUES (?, ?, ?, ?)
 RETURNING *;
 
+-- name: DeleteFeed :exec
+DELETE FROM feeds
+WHERE id = ?;
+
 -- name: GetFeeds :many
 SELECT *
 FROM feeds;

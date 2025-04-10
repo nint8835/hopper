@@ -23,7 +23,7 @@ var runCmd = &cobra.Command{
 		cfg, err := config.Load()
 		checkErr(err, "Failed to load config")
 
-		db, err := sql.Open("sqlite", cfg.DatabasePath+"?_foreign_keys=on")
+		db, err := sql.Open("sqlite", cfg.DatabasePath+"?_pragma=foreign_keys(1)")
 		checkErr(err, "Failed to connect to database")
 
 		migrationRunner, err := migrations.New(db)
