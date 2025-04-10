@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/bwmarrin/discordgo"
 	"pkg.nit.so/switchboard"
@@ -139,11 +140,52 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 	go b.watcher.RefreshFeed(newFeed, true)
 }
 
+func (b *Bot) handleListCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args struct{}) {
+	allFeeds, err := b.Queries.GetFeeds(context.Background())
+	if err != nil {
+		b.logger.Error("Failed to get feeds", "error", err)
+		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
+			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
+				{
+					Title:       "Failed to get feeds",
+					Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+					Color:       0xff0000,
+				},
+			}),
+		})
+		return
+	}
+
+	feedStrings := make([]string, 0, len(allFeeds))
+	for _, feed := range allFeeds {
+		feedStrings = append(feedStrings, fmt.Sprintf("- `%d`. **%s** (`%s`)", feed.ID, feed.Title, feed.FeedUrl))
+	}
+
+	err = session.InteractionRespond(
+		i.Interaction,
+		&discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Content: strings.Join(feedStrings, "\n"),
+			},
+		},
+	)
+	if err != nil {
+		b.logger.Error("Failed to respond to interaction", "error", err)
+	}
+}
+
 func (b *Bot) registerCommands() {
 	_ = b.parser.AddCommand(&switchboard.Command{
 		Name:        "add",
 		Description: "Add a new feed",
 		Handler:     b.handleAddCommand,
+		GuildID:     b.config.DiscordGuildId,
+	})
+	_ = b.parser.AddCommand(&switchboard.Command{
+		Name:        "list",
+		Description: "List all feeds",
+		Handler:     b.handleListCommand,
 		GuildID:     b.config.DiscordGuildId,
 	})
 }
