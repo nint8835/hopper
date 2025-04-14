@@ -4,6 +4,7 @@ go 1.24.1
 
 require (
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.3.1
+	github.com/PuerkitoBio/goquery v1.8.0
 	github.com/bwmarrin/discordgo v0.28.1
 	github.com/golang-migrate/migrate/v4 v4.18.2
 	github.com/joho/godotenv v1.5.1
@@ -20,7 +21,6 @@ require (
 	cel.dev/expr v0.19.1 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/JohannesKaufmann/dom v0.2.0 // indirect
-	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
