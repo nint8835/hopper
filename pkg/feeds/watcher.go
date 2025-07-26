@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"sort"
 	"strings"
 	"time"
@@ -67,8 +68,20 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	}
 
 	if item.Image != nil {
-		embed.Image = &discordgo.MessageEmbedImage{
-			URL: item.Image.URL,
+		imageUrl := item.Image.URL
+		if strings.HasPrefix(imageUrl, "/") {
+			imageUrl = feed.Url + imageUrl
+		}
+
+		_, err = url.ParseRequestURI(imageUrl)
+
+		if err != nil {
+			f.logger.Warn("Invalid image URL", "feed_id", feed.ID, "item_guid", item.GUID, "image_url", imageUrl, "error", err)
+		} else {
+			f.logger.Debug("Using image URL", "feed_id", feed.ID, "item_guid", item.GUID, "image_url", imageUrl)
+			embed.Image = &discordgo.MessageEmbedImage{
+				URL: imageUrl,
+			}
 		}
 	}
 
