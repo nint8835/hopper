@@ -124,7 +124,14 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 
 	// Sort items by published date ascending, to ensure they are posted in the order they were published
 	sort.Slice(feedData.Items, func(i, j int) bool {
-		return feedData.Items[i].PublishedParsed.Before(*feedData.Items[j].PublishedParsed)
+		iTime := feedData.Items[i].PublishedParsed
+		jTime := feedData.Items[j].PublishedParsed
+
+		if iTime == nil || jTime == nil {
+			return false
+		}
+
+		return iTime.Before(*jTime)
 	})
 
 	for _, item := range feedData.Items {
