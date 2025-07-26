@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -120,6 +121,11 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse feed: %w", err)
 	}
+
+	// Sort items by published date ascending, to ensure they are posted in the order they were published
+	sort.Slice(feedData.Items, func(i, j int) bool {
+		return feedData.Items[i].PublishedParsed.Before(*feedData.Items[j].PublishedParsed)
+	})
 
 	for _, item := range feedData.Items {
 		if _, seen := seenPostsMap[item.GUID]; seen {
