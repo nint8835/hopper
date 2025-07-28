@@ -20,6 +20,7 @@ type Config struct {
 	DiscordGuildId   string        `split_words:"true"`
 	DiscordChannelId string        `split_words:"true"`
 	PollInterval     time.Duration `default:"1h" split_words:"true"`
+	ShowBackfill     bool          `default:"false" split_words:"true"`
 }
 
 func Load() (*Config, error) {
