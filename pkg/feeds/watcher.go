@@ -155,7 +155,7 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		f.logger.Debug("New item found", "feed_id", feed.ID, "item_guid", item.GUID)
 
 		var postMsgId string
-		if !isBackfill {
+		if f.cfg.ShowBackfill || !isBackfill {
 			postMsgId, err = f.postItem(feed, item)
 			if err != nil {
 				return fmt.Errorf("failed to post item: %w", err)
