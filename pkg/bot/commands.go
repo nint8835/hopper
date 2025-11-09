@@ -86,8 +86,11 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 	}
 
 	var channelID sql.NullString
+	displayChannelID := b.config.DiscordChannelId
+
 	if args.Channel != nil {
 		channelID = sql.NullString{String: args.Channel.ID, Valid: true}
+		displayChannelID = args.Channel.ID
 	}
 
 	newFeed, err := b.Queries.CreateFeed(
@@ -135,6 +138,10 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 					{
 						Name:  "Feed URL",
 						Value: fmt.Sprintf("`%s`", newFeed.FeedUrl),
+					},
+					{
+						Name:  "Posting in",
+						Value: fmt.Sprintf("<#%s>", displayChannelID),
 					},
 				},
 			},
