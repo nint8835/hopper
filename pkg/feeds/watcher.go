@@ -37,6 +37,11 @@ type FeedWatcher struct {
 func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, error) {
 	f.logger.Debug("Posting item", "feed_id", feed.ID, "item_guid", item.GUID)
 
+	channelID := f.cfg.DiscordChannelId
+	if feed.ChannelID.Valid {
+		channelID = feed.ChannelID.String
+	}
+
 	truncatedTitleForEmbed := truncate.String(item.Title, 253)
 	if truncatedTitleForEmbed != item.Title {
 		truncatedTitleForEmbed += "..."
@@ -97,7 +102,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	}
 
 	postMsg, err := f.Session.ChannelMessageSendEmbed(
-		f.cfg.DiscordChannelId,
+		channelID,
 		embed,
 		discordgo.WithContext(f.watcherCtx),
 	)
@@ -106,7 +111,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	}
 
 	_, err = f.Session.MessageThreadStart(
-		f.cfg.DiscordChannelId,
+		channelID,
 		postMsg.ID,
 		truncatedTitleForThread,
 		4320,

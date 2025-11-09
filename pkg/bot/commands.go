@@ -16,7 +16,8 @@ import (
 )
 
 type addCommandsArgs struct {
-	URL string `description:"URL to add. Should be either a link to a feed or a site under which to search for feeds."`
+	URL     string  `description:"URL to add. Should be either a link to a feed or a site under which to search for feeds."`
+	Channel *string `description:"Optional: Discord channel ID to post feed updates to. If not specified, uses the default channel."`
 }
 
 func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args addCommandsArgs) {
@@ -84,6 +85,11 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		siteLink = feed.Links[0]
 	}
 
+	var channelID sql.NullString
+	if args.Channel != nil {
+		channelID = sql.NullString{String: *args.Channel, Valid: true}
+	}
+
 	newFeed, err := b.Queries.CreateFeed(
 		context.Background(),
 		database.CreateFeedParams{
@@ -91,6 +97,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 			Description: feed.Description,
 			Url:         siteLink,
 			FeedUrl:     feedUrl,
+			ChannelID:   channelID,
 		},
 	)
 	if err != nil {
