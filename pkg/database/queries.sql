@@ -1,6 +1,6 @@
 -- name: CreateFeed :one
-INSERT INTO feeds (title, description, url, feed_url)
-VALUES (?, ?, ?, ?)
+INSERT INTO feeds (title, description, url, feed_url, channel_id)
+VALUES (?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: DeleteFeed :exec

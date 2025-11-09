@@ -7,12 +7,13 @@ package database
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createFeed = `-- name: CreateFeed :one
-INSERT INTO feeds (title, description, url, feed_url)
-VALUES (?, ?, ?, ?)
-RETURNING id, title, description, url, feed_url
+INSERT INTO feeds (title, description, url, feed_url, channel_id)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, title, description, url, feed_url, channel_id
 `
 
 type CreateFeedParams struct {
@@ -20,6 +21,7 @@ type CreateFeedParams struct {
 	Description string
 	Url         string
 	FeedUrl     string
+	ChannelID   sql.NullString
 }
 
 func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, error) {
@@ -28,6 +30,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		arg.Description,
 		arg.Url,
 		arg.FeedUrl,
+		arg.ChannelID,
 	)
 	var i Feed
 	err := row.Scan(
@@ -36,6 +39,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.Description,
 		&i.Url,
 		&i.FeedUrl,
+		&i.ChannelID,
 	)
 	return i, err
 }
@@ -84,7 +88,7 @@ func (q *Queries) DeleteFeed(ctx context.Context, id int64) error {
 }
 
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, title, description, url, feed_url
+SELECT id, title, description, url, feed_url, channel_id
 FROM feeds
 WHERE feed_url = ?
 `
@@ -98,12 +102,13 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, feedUrl string) (Feed, error
 		&i.Description,
 		&i.Url,
 		&i.FeedUrl,
+		&i.ChannelID,
 	)
 	return i, err
 }
 
 const getFeeds = `-- name: GetFeeds :many
-SELECT id, title, description, url, feed_url
+SELECT id, title, description, url, feed_url, channel_id
 FROM feeds
 `
 
@@ -122,6 +127,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]Feed, error) {
 			&i.Description,
 			&i.Url,
 			&i.FeedUrl,
+			&i.ChannelID,
 		); err != nil {
 			return nil, err
 		}

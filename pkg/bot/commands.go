@@ -16,7 +16,8 @@ import (
 )
 
 type addCommandsArgs struct {
-	URL string `description:"URL to add. Should be either a link to a feed or a site under which to search for feeds."`
+	URL     string             `description:"URL to add. Should be either a link to a feed or a site under which to search for feeds."`
+	Channel *discordgo.Channel `description:"Channel to post feed updates to. If not specified, uses the default channel."`
 }
 
 func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args addCommandsArgs) {
@@ -84,6 +85,14 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		siteLink = feed.Links[0]
 	}
 
+	var channelID sql.NullString
+	displayChannelID := b.config.DiscordChannelId
+
+	if args.Channel != nil {
+		channelID = sql.NullString{String: args.Channel.ID, Valid: true}
+		displayChannelID = args.Channel.ID
+	}
+
 	newFeed, err := b.Queries.CreateFeed(
 		context.Background(),
 		database.CreateFeedParams{
@@ -91,6 +100,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 			Description: feed.Description,
 			Url:         siteLink,
 			FeedUrl:     feedUrl,
+			ChannelID:   channelID,
 		},
 	)
 	if err != nil {
@@ -128,6 +138,10 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 					{
 						Name:  "Feed URL",
 						Value: fmt.Sprintf("`%s`", newFeed.FeedUrl),
+					},
+					{
+						Name:  "Posting in",
+						Value: fmt.Sprintf("<#%s>", displayChannelID),
 					},
 				},
 			},

@@ -4,12 +4,17 @@
 
 package database
 
+import (
+	"database/sql"
+)
+
 type Feed struct {
 	ID          int64
 	Title       string
 	Description string
 	Url         string
 	FeedUrl     string
+	ChannelID   sql.NullString
 }
 
 type Post struct {
