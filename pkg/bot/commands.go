@@ -17,7 +17,7 @@ import (
 
 type addCommandsArgs struct {
 	URL     string             `description:"URL to add. Should be either a link to a feed or a site under which to search for feeds."`
-	Channel *discordgo.Channel `description:"Discord channel ID to post feed updates to. If not specified, uses the default channel."`
+	Channel *discordgo.Channel `description:"Channel to post feed updates to. If not specified, uses the default channel."`
 }
 
 func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args addCommandsArgs) {
