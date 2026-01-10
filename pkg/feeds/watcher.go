@@ -28,10 +28,29 @@ type FeedWatcher struct {
 	parser *gofeed.Parser
 	logger *slog.Logger
 
+	channelTypeCache map[string]discordgo.ChannelType
+
 	watcherTicker *time.Ticker
 	watcherCtx    context.Context
 	stopWatcher   context.CancelFunc
 	stoppedChan   chan struct{}
+}
+
+func (f *FeedWatcher) getChannelType(channelID string) (discordgo.ChannelType, error) {
+	if channelType, exists := f.channelTypeCache[channelID]; exists {
+		return channelType, nil
+	}
+
+	channel, err := f.Session.State.Channel(channelID)
+	if err != nil {
+		channel, err = f.Session.Channel(channelID)
+		if err != nil {
+			return 0, fmt.Errorf("failed to get channel info: %w", err)
+		}
+	}
+
+	f.channelTypeCache[channelID] = channel.Type
+	return channel.Type, nil
 }
 
 func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, error) {
@@ -101,26 +120,48 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 		}
 	}
 
-	postMsg, err := f.Session.ChannelMessageSendEmbed(
-		channelID,
-		embed,
-		discordgo.WithContext(f.watcherCtx),
-	)
+	channelType, err := f.getChannelType(channelID)
 	if err != nil {
-		return "", fmt.Errorf("failed to send message: %w", err)
+		return "", fmt.Errorf("failed to get channel type: %w", err)
 	}
 
-	_, err = f.Session.MessageThreadStart(
-		channelID,
-		postMsg.ID,
-		truncatedTitleForThread,
-		4320,
-		discordgo.WithContext(f.watcherCtx),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to start thread: %w", err)
+	switch channelType {
+	case discordgo.ChannelTypeGuildText:
+		postMsg, err := f.Session.ChannelMessageSendEmbed(
+			channelID,
+			embed,
+			discordgo.WithContext(f.watcherCtx),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to send message: %w", err)
+		}
+
+		_, err = f.Session.MessageThreadStart(
+			channelID,
+			postMsg.ID,
+			truncatedTitleForThread,
+			4320,
+			discordgo.WithContext(f.watcherCtx),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to start thread: %w", err)
+		}
+		return postMsg.ID, nil
+	case discordgo.ChannelTypeGuildForum:
+		forumThread, err := f.Session.ForumThreadStartEmbed(
+			channelID,
+			truncatedTitleForThread,
+			4320,
+			embed,
+			discordgo.WithContext(f.watcherCtx),
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to start forum thread: %w", err)
+		}
+		return forumThread.ID, nil
+	default:
+		return "", fmt.Errorf("unsupported channel type: %d", channelType)
 	}
-	return postMsg.ID, nil
 }
 
 func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
@@ -255,6 +296,8 @@ func New(cfg *config.Config, db *sql.DB, session *discordgo.Session) *FeedWatche
 		cfg:     cfg,
 		parser:  gofeed.NewParser(),
 		logger:  slog.Default().With("component", "feed-watcher"),
+
+		channelTypeCache: make(map[string]discordgo.ChannelType),
 
 		watcherTicker: time.NewTicker(cfg.PollInterval),
 		watcherCtx:    watcherCtx,
