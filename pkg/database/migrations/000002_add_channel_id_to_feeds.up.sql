@@ -1,1 +1,2 @@
-ALTER TABLE feeds ADD COLUMN channel_id TEXT;
+ALTER TABLE feeds
+ADD COLUMN channel_id TEXT;

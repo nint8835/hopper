@@ -14,10 +14,10 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/bwmarrin/discordgo"
 	"github.com/mmcdole/gofeed"
-	"tailscale.com/util/truncate"
 
 	"github.com/nint8835/hopper/pkg/config"
 	"github.com/nint8835/hopper/pkg/database"
+	"github.com/nint8835/hopper/pkg/utils"
 )
 
 type FeedWatcher struct {
@@ -61,30 +61,15 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 		channelID = feed.ChannelID.String
 	}
 
-	truncatedTitleForEmbed := truncate.String(item.Title, 253)
-	if truncatedTitleForEmbed != item.Title {
-		truncatedTitleForEmbed += "..."
-	}
-
-	truncatedTitleForThread := truncate.String(item.Title, 97)
-	if truncatedTitleForThread != item.Title {
-		truncatedTitleForThread += "..."
-	}
-
 	markdownDescription, err := htmltomarkdown.ConvertString(item.Description)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert description to markdown: %w", err)
 	}
 
-	truncatedDescription := truncate.String(markdownDescription, 253)
-	if truncatedDescription != markdownDescription {
-		truncatedDescription += "..."
-	}
-
 	embed := &discordgo.MessageEmbed{
-		Title:       truncatedTitleForEmbed,
+		Title:       utils.TruncateString(item.Title, 256),
 		URL:         item.Link,
-		Description: truncatedDescription,
+		Description: utils.TruncateString(markdownDescription, 256),
 		Author: &discordgo.MessageEmbedAuthor{
 			Name: feed.Title,
 			URL:  feed.Url,
@@ -139,7 +124,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 		_, err = f.Session.MessageThreadStart(
 			channelID,
 			postMsg.ID,
-			truncatedTitleForThread,
+			utils.TruncateString(item.Title, 100),
 			4320,
 			discordgo.WithContext(f.watcherCtx),
 		)
@@ -150,7 +135,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	case discordgo.ChannelTypeGuildForum:
 		forumThread, err := f.Session.ForumThreadStartEmbed(
 			channelID,
-			truncatedTitleForThread,
+			utils.TruncateString(item.Title, 100),
 			4320,
 			embed,
 			discordgo.WithContext(f.watcherCtx),
