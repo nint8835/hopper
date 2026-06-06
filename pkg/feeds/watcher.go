@@ -152,6 +152,8 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		return iTime.Before(*jTime)
 	})
 
+	isPaused := feed.PausedUntil.Valid && feed.PausedUntil.Time.After(time.Now())
+
 	for _, item := range feedData.Items {
 		if _, seen := seenPostsMap[item.GUID]; seen {
 			continue
@@ -160,7 +162,8 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		f.logger.Debug("New item found", "feed_id", feed.ID, "item_guid", item.GUID)
 
 		var postMsgId string
-		if f.cfg.ShowBackfill || !isBackfill {
+		shouldPost := (f.cfg.ShowBackfill || !isBackfill) && !isPaused
+		if shouldPost {
 			postMsgId, err = f.postItem(feed, item)
 			if err != nil {
 				return fmt.Errorf("failed to post item: %w", err)

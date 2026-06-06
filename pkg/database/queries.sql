@@ -11,10 +11,25 @@ WHERE id = ?;
 SELECT *
 FROM feeds;
 
+-- name: GetFeedByID :one
+SELECT *
+FROM feeds
+WHERE id = ?;
+
 -- name: GetFeedByUrl :one
 SELECT *
 FROM feeds
 WHERE feed_url = ?;
+
+-- name: PauseFeed :exec
+UPDATE feeds
+SET paused_until = ?
+WHERE id = ?;
+
+-- name: UnpauseFeed :exec
+UPDATE feeds
+SET paused_until = NULL
+WHERE id = ?;
 
 -- name: GetPosts :many
 SELECT post_guid

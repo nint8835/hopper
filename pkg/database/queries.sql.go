@@ -13,7 +13,7 @@ import (
 const createFeed = `-- name: CreateFeed :one
 INSERT INTO feeds (title, description, url, feed_url, channel_id)
 VALUES (?, ?, ?, ?, ?)
-RETURNING id, title, description, url, feed_url, channel_id
+RETURNING id, title, description, url, feed_url, channel_id, paused_until
 `
 
 type CreateFeedParams struct {
@@ -40,6 +40,7 @@ func (q *Queries) CreateFeed(ctx context.Context, arg CreateFeedParams) (Feed, e
 		&i.Url,
 		&i.FeedUrl,
 		&i.ChannelID,
+		&i.PausedUntil,
 	)
 	return i, err
 }
@@ -87,8 +88,29 @@ func (q *Queries) DeleteFeed(ctx context.Context, id int64) error {
 	return err
 }
 
+const getFeedByID = `-- name: GetFeedByID :one
+SELECT id, title, description, url, feed_url, channel_id, paused_until
+FROM feeds
+WHERE id = ?
+`
+
+func (q *Queries) GetFeedByID(ctx context.Context, id int64) (Feed, error) {
+	row := q.db.QueryRowContext(ctx, getFeedByID, id)
+	var i Feed
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Description,
+		&i.Url,
+		&i.FeedUrl,
+		&i.ChannelID,
+		&i.PausedUntil,
+	)
+	return i, err
+}
+
 const getFeedByUrl = `-- name: GetFeedByUrl :one
-SELECT id, title, description, url, feed_url, channel_id
+SELECT id, title, description, url, feed_url, channel_id, paused_until
 FROM feeds
 WHERE feed_url = ?
 `
@@ -103,12 +125,13 @@ func (q *Queries) GetFeedByUrl(ctx context.Context, feedUrl string) (Feed, error
 		&i.Url,
 		&i.FeedUrl,
 		&i.ChannelID,
+		&i.PausedUntil,
 	)
 	return i, err
 }
 
 const getFeeds = `-- name: GetFeeds :many
-SELECT id, title, description, url, feed_url, channel_id
+SELECT id, title, description, url, feed_url, channel_id, paused_until
 FROM feeds
 `
 
@@ -128,6 +151,7 @@ func (q *Queries) GetFeeds(ctx context.Context) ([]Feed, error) {
 			&i.Url,
 			&i.FeedUrl,
 			&i.ChannelID,
+			&i.PausedUntil,
 		); err != nil {
 			return nil, err
 		}
@@ -169,4 +193,31 @@ func (q *Queries) GetPosts(ctx context.Context, feedID int64) ([]string, error) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const pauseFeed = `-- name: PauseFeed :exec
+UPDATE feeds
+SET paused_until = ?
+WHERE id = ?
+`
+
+type PauseFeedParams struct {
+	PausedUntil sql.NullTime
+	ID          int64
+}
+
+func (q *Queries) PauseFeed(ctx context.Context, arg PauseFeedParams) error {
+	_, err := q.db.ExecContext(ctx, pauseFeed, arg.PausedUntil, arg.ID)
+	return err
+}
+
+const unpauseFeed = `-- name: UnpauseFeed :exec
+UPDATE feeds
+SET paused_until = NULL
+WHERE id = ?
+`
+
+func (q *Queries) UnpauseFeed(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, unpauseFeed, id)
+	return err
 }
