@@ -186,7 +186,7 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 	return nil
 }
 
-func (f *FeedWatcher) refreshFeeds() error {
+func (f *FeedWatcher) RefreshFeeds() error {
 	feeds, err := f.Queries.GetFeeds(f.watcherCtx)
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %w", err)
@@ -211,7 +211,7 @@ func (f *FeedWatcher) refreshFeeds() error {
 func (f *FeedWatcher) scheduledTask() {
 	f.logger.Debug("Refreshing feeds")
 
-	err := f.refreshFeeds()
+	err := f.RefreshFeeds()
 	if err != nil {
 		f.logger.Error("Failed to refresh feeds", "error", err)
 		return

@@ -26,3 +26,6 @@ go.work.sum
 .env
 
 hopper.db
+
+# Local testing artifacts (test feeds, throwaway scripts, etc.)
+scratch/
