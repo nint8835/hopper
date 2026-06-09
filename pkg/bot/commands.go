@@ -153,9 +153,7 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 	}
 
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-		if err := b.watcher.RefreshFeed(ctx, newFeed, true); err != nil {
+		if err := b.watcher.RefreshFeed(context.Background(), newFeed, true); err != nil {
 			b.logger.Error("Failed to backfill new feed", "feed_id", newFeed.ID, "error", err)
 		}
 	}()
@@ -397,94 +395,6 @@ func (b *Bot) handleUnpauseCommand(session *discordgo.Session, i *discordgo.Inte
 	}
 }
 
-type refreshCommandArgs struct {
-	ID *int `description:"Optional ID of the feed to refresh. If omitted, refreshes all feeds."`
-}
-
-func (b *Bot) handleRefreshCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args refreshCommandArgs) {
-	if err := session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{},
-	}); err != nil {
-		b.logger.Error("Failed to defer interaction response", "error", err)
-		return
-	}
-
-	// Discord interaction tokens expire after 15 minutes; cap the refresh so we
-	// always have time to edit the response with the outcome.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-	defer cancel()
-
-	if args.ID != nil {
-		feed, err := b.Queries.GetFeedByID(ctx, int64(*args.ID))
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-					Content: utils.PtrTo(fmt.Sprintf("No feed found with ID `%d`.", *args.ID)),
-				})
-				return
-			}
-
-			b.logger.Error("Failed to get feed", "error", err)
-			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
-					{
-						Title:       "Failed to get feed",
-						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
-						Color:       0xff0000,
-					},
-				}),
-			})
-			return
-		}
-
-		err = b.watcher.RefreshFeed(ctx, feed, false)
-		if err != nil {
-			b.logger.Error("Failed to refresh feed", "feed_id", feed.ID, "error", err)
-			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-				Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
-					{
-						Title:       "Failed to refresh feed",
-						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
-						Color:       0xff0000,
-					},
-				}),
-			})
-			return
-		}
-
-		_, err = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Content: utils.PtrTo(fmt.Sprintf("Refreshed **%s**.", feed.Title)),
-		})
-		if err != nil {
-			b.logger.Error("Failed to respond to interaction", "error", err)
-		}
-		return
-	}
-
-	err := b.watcher.RefreshFeeds(ctx)
-	if err != nil {
-		b.logger.Error("Failed to refresh feeds", "error", err)
-		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-			Embeds: utils.PtrTo([]*discordgo.MessageEmbed{
-				{
-					Title:       "Failed to refresh one or more feeds",
-					Description: fmt.Sprintf("```\n%s\n```", err.Error()),
-					Color:       0xff0000,
-				},
-			}),
-		})
-		return
-	}
-
-	_, err = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
-		Content: utils.PtrTo("Refreshed all feeds."),
-	})
-	if err != nil {
-		b.logger.Error("Failed to respond to interaction", "error", err)
-	}
-}
-
 func (b *Bot) registerCommands() {
 	_ = b.parser.AddCommand(&switchboard.Command{
 		Name:        "add",
@@ -514,12 +424,6 @@ func (b *Bot) registerCommands() {
 		Name:        "unpause",
 		Description: "Resume a paused feed",
 		Handler:     b.handleUnpauseCommand,
-		GuildID:     b.config.DiscordGuildId,
-	})
-	_ = b.parser.AddCommand(&switchboard.Command{
-		Name:        "refresh",
-		Description: "Manually trigger a feed refresh (useful for testing)",
-		Handler:     b.handleRefreshCommand,
 		GuildID:     b.config.DiscordGuildId,
 	})
 }

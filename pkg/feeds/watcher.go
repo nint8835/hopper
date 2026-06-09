@@ -128,9 +128,17 @@ func (f *FeedWatcher) postItem(ctx context.Context, feed database.Feed, item *go
 	return postMsg.ID, nil
 }
 
+// refreshFeedTimeout bounds how long a single feed refresh can take. A parse
+// plus a handful of Discord posts should complete in seconds; this is just a
+// safety net against a stuck feed or hung Discord call.
+const refreshFeedTimeout = 2 * time.Minute
+
 func (f *FeedWatcher) RefreshFeed(ctx context.Context, feed database.Feed, isBackfill bool) error {
 	f.refreshMu.Lock()
 	defer f.refreshMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, refreshFeedTimeout)
+	defer cancel()
 
 	f.logger.Debug("Refreshing feed", "feed_id", feed.ID, "feed_url", feed.FeedUrl)
 
