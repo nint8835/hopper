@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -32,9 +33,13 @@ type FeedWatcher struct {
 	watcherCtx    context.Context
 	stopWatcher   context.CancelFunc
 	stoppedChan   chan struct{}
+
+	// refreshMu serializes refresh passes so the scheduled ticker and manual
+	// refresh invocations don't race on the (feed_id, post_guid) primary key.
+	refreshMu sync.Mutex
 }
 
-func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, error) {
+func (f *FeedWatcher) postItem(ctx context.Context, feed database.Feed, item *gofeed.Item) (string, error) {
 	f.logger.Debug("Posting item", "feed_id", feed.ID, "item_guid", item.GUID)
 
 	channelID := f.cfg.DiscordChannelId
@@ -104,7 +109,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	postMsg, err := f.Session.ChannelMessageSendEmbed(
 		channelID,
 		embed,
-		discordgo.WithContext(f.watcherCtx),
+		discordgo.WithContext(ctx),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to send message: %w", err)
@@ -115,7 +120,7 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 		postMsg.ID,
 		truncatedTitleForThread,
 		4320,
-		discordgo.WithContext(f.watcherCtx),
+		discordgo.WithContext(ctx),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to start thread: %w", err)
@@ -123,10 +128,13 @@ func (f *FeedWatcher) postItem(feed database.Feed, item *gofeed.Item) (string, e
 	return postMsg.ID, nil
 }
 
-func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
+func (f *FeedWatcher) RefreshFeed(ctx context.Context, feed database.Feed, isBackfill bool) error {
+	f.refreshMu.Lock()
+	defer f.refreshMu.Unlock()
+
 	f.logger.Debug("Refreshing feed", "feed_id", feed.ID, "feed_url", feed.FeedUrl)
 
-	seenPosts, err := f.Queries.GetPosts(f.watcherCtx, feed.ID)
+	seenPosts, err := f.Queries.GetPosts(ctx, feed.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get seen posts for feed %d: %w", feed.ID, err)
 	}
@@ -135,7 +143,7 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		seenPostsMap[post] = struct{}{}
 	}
 
-	feedData, err := f.parser.ParseURLWithContext(feed.FeedUrl, f.watcherCtx)
+	feedData, err := f.parser.ParseURLWithContext(feed.FeedUrl, ctx)
 	if err != nil {
 		return fmt.Errorf("failed to parse feed: %w", err)
 	}
@@ -164,13 +172,13 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 		var postMsgId string
 		shouldPost := (f.cfg.ShowBackfill || !isBackfill) && !isPaused
 		if shouldPost {
-			postMsgId, err = f.postItem(feed, item)
+			postMsgId, err = f.postItem(ctx, feed, item)
 			if err != nil {
 				return fmt.Errorf("failed to post item: %w", err)
 			}
 		}
 
-		err = f.Queries.CreatePost(f.watcherCtx, database.CreatePostParams{
+		err = f.Queries.CreatePost(ctx, database.CreatePostParams{
 			PostGuid:    item.GUID,
 			FeedID:      feed.ID,
 			Title:       item.Title,
@@ -186,8 +194,8 @@ func (f *FeedWatcher) RefreshFeed(feed database.Feed, isBackfill bool) error {
 	return nil
 }
 
-func (f *FeedWatcher) RefreshFeeds() error {
-	feeds, err := f.Queries.GetFeeds(f.watcherCtx)
+func (f *FeedWatcher) RefreshFeeds(ctx context.Context) error {
+	feeds, err := f.Queries.GetFeeds(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get feeds: %w", err)
 	}
@@ -195,7 +203,7 @@ func (f *FeedWatcher) RefreshFeeds() error {
 	var feedErrors []error
 
 	for _, feed := range feeds {
-		err := f.RefreshFeed(feed, false)
+		err := f.RefreshFeed(ctx, feed, false)
 		if err != nil {
 			feedErrors = append(feedErrors, fmt.Errorf("failed to refresh feed %d: %w", feed.ID, err))
 		}
@@ -211,7 +219,7 @@ func (f *FeedWatcher) RefreshFeeds() error {
 func (f *FeedWatcher) scheduledTask() {
 	f.logger.Debug("Refreshing feeds")
 
-	err := f.RefreshFeeds()
+	err := f.RefreshFeeds(f.watcherCtx)
 	if err != nil {
 		f.logger.Error("Failed to refresh feeds", "error", err)
 		return

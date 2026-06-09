@@ -152,7 +152,13 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		b.logger.Error("Failed to respond to interaction", "error", err)
 	}
 
-	go b.watcher.RefreshFeed(newFeed, true)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+		if err := b.watcher.RefreshFeed(ctx, newFeed, true); err != nil {
+			b.logger.Error("Failed to backfill new feed", "feed_id", newFeed.ID, "error", err)
+		}
+	}()
 }
 
 func (b *Bot) handleListCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args struct{}) {
@@ -396,13 +402,21 @@ type refreshCommandArgs struct {
 }
 
 func (b *Bot) handleRefreshCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args refreshCommandArgs) {
-	_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+	if err := session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{},
-	})
+	}); err != nil {
+		b.logger.Error("Failed to defer interaction response", "error", err)
+		return
+	}
+
+	// Discord interaction tokens expire after 15 minutes; cap the refresh so we
+	// always have time to edit the response with the outcome.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
 
 	if args.ID != nil {
-		feed, err := b.Queries.GetFeedByID(context.Background(), int64(*args.ID))
+		feed, err := b.Queries.GetFeedByID(ctx, int64(*args.ID))
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
@@ -424,7 +438,7 @@ func (b *Bot) handleRefreshCommand(session *discordgo.Session, i *discordgo.Inte
 			return
 		}
 
-		err = b.watcher.RefreshFeed(feed, false)
+		err = b.watcher.RefreshFeed(ctx, feed, false)
 		if err != nil {
 			b.logger.Error("Failed to refresh feed", "feed_id", feed.ID, "error", err)
 			_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
@@ -448,7 +462,7 @@ func (b *Bot) handleRefreshCommand(session *discordgo.Session, i *discordgo.Inte
 		return
 	}
 
-	err := b.watcher.RefreshFeeds()
+	err := b.watcher.RefreshFeeds(ctx)
 	if err != nil {
 		b.logger.Error("Failed to refresh feeds", "error", err)
 		_, _ = session.InteractionResponseEdit(i.Interaction, &discordgo.WebhookEdit{
