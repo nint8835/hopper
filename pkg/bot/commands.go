@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 	"pkg.nit.so/switchboard"
@@ -151,7 +152,11 @@ func (b *Bot) handleAddCommand(session *discordgo.Session, i *discordgo.Interact
 		b.logger.Error("Failed to respond to interaction", "error", err)
 	}
 
-	go b.watcher.RefreshFeed(newFeed, true)
+	go func() {
+		if err := b.watcher.RefreshFeed(context.Background(), newFeed, true); err != nil {
+			b.logger.Error("Failed to backfill new feed", "feed_id", newFeed.ID, "error", err)
+		}
+	}()
 }
 
 func (b *Bot) handleListCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args struct{}) {
@@ -172,7 +177,15 @@ func (b *Bot) handleListCommand(session *discordgo.Session, i *discordgo.Interac
 
 	feedStrings := make([]string, 0, len(allFeeds))
 	for _, feed := range allFeeds {
-		feedStrings = append(feedStrings, fmt.Sprintf("- `%d`. **%s** (`%s`)", feed.ID, feed.Title, feed.FeedUrl))
+		pausedSuffix := ""
+		if feed.PausedUntil.Valid && feed.PausedUntil.Time.After(time.Now()) {
+			if feed.PausedUntil.Time.Year() >= 9999 {
+				pausedSuffix = " (paused)"
+			} else {
+				pausedSuffix = fmt.Sprintf(" (paused until <t:%d:f>)", feed.PausedUntil.Time.Unix())
+			}
+		}
+		feedStrings = append(feedStrings, fmt.Sprintf("- `%d`. **%s** (`%s`)%s", feed.ID, feed.Title, feed.FeedUrl, pausedSuffix))
 	}
 
 	err = session.InteractionRespond(
@@ -223,6 +236,165 @@ func (b *Bot) handleRemoveCommand(session *discordgo.Session, i *discordgo.Inter
 	}
 }
 
+type pauseCommandArgs struct {
+	ID       int     `description:"ID of the feed to pause."`
+	Duration *string `description:"Optional duration to pause for (e.g. 1h, 30m, 24h). If not specified, pauses indefinitely."`
+}
+
+// indefinitePauseTime is used to represent an indefinite pause. Far enough in the future
+// to never be reached, but still a valid sql.NullTime.
+var indefinitePauseTime = time.Date(9999, time.December, 31, 23, 59, 59, 0, time.UTC)
+
+func (b *Bot) handlePauseCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args pauseCommandArgs) {
+	feed, err := b.Queries.GetFeedByID(context.Background(), int64(args.ID))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("No feed found with ID `%d`.", args.ID),
+				},
+			})
+			return
+		}
+
+		b.logger.Error("Failed to get feed", "error", err)
+		_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{
+					{
+						Title:       "Failed to get feed",
+						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+						Color:       0xff0000,
+					},
+				},
+			},
+		})
+		return
+	}
+
+	pausedUntil := indefinitePauseTime
+	durationDisplay := "indefinitely"
+
+	if args.Duration != nil && *args.Duration != "" {
+		duration, err := time.ParseDuration(*args.Duration)
+		if err != nil {
+			_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("Invalid duration `%s`. Use a Go duration string like `1h`, `30m`, or `24h`.", *args.Duration),
+				},
+			})
+			return
+		}
+		if duration <= 0 {
+			_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Duration must be positive.",
+				},
+			})
+			return
+		}
+		pausedUntil = time.Now().Add(duration)
+		durationDisplay = fmt.Sprintf("until <t:%d:f>", pausedUntil.Unix())
+	}
+
+	err = b.Queries.PauseFeed(context.Background(), database.PauseFeedParams{
+		PausedUntil: sql.NullTime{Time: pausedUntil, Valid: true},
+		ID:          feed.ID,
+	})
+	if err != nil {
+		b.logger.Error("Failed to pause feed", "error", err)
+		_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{
+					{
+						Title:       "Failed to pause feed",
+						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+						Color:       0xff0000,
+					},
+				},
+			},
+		})
+		return
+	}
+
+	err = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("Paused **%s** %s. New items will be silently consumed until resumed.", feed.Title, durationDisplay),
+		},
+	})
+	if err != nil {
+		b.logger.Error("Failed to respond to interaction", "error", err)
+	}
+}
+
+type unpauseCommandArgs struct {
+	ID int `description:"ID of the feed to unpause."`
+}
+
+func (b *Bot) handleUnpauseCommand(session *discordgo.Session, i *discordgo.InteractionCreate, args unpauseCommandArgs) {
+	feed, err := b.Queries.GetFeedByID(context.Background(), int64(args.ID))
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: fmt.Sprintf("No feed found with ID `%d`.", args.ID),
+				},
+			})
+			return
+		}
+
+		b.logger.Error("Failed to get feed", "error", err)
+		_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{
+					{
+						Title:       "Failed to get feed",
+						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+						Color:       0xff0000,
+					},
+				},
+			},
+		})
+		return
+	}
+
+	err = b.Queries.UnpauseFeed(context.Background(), feed.ID)
+	if err != nil {
+		b.logger.Error("Failed to unpause feed", "error", err)
+		_ = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseChannelMessageWithSource,
+			Data: &discordgo.InteractionResponseData{
+				Embeds: []*discordgo.MessageEmbed{
+					{
+						Title:       "Failed to unpause feed",
+						Description: fmt.Sprintf("```\n%s\n```", err.Error()),
+						Color:       0xff0000,
+					},
+				},
+			},
+		})
+		return
+	}
+
+	err = session.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf("Resumed **%s**.", feed.Title),
+		},
+	})
+	if err != nil {
+		b.logger.Error("Failed to respond to interaction", "error", err)
+	}
+}
+
 func (b *Bot) registerCommands() {
 	_ = b.parser.AddCommand(&switchboard.Command{
 		Name:        "add",
@@ -240,6 +412,18 @@ func (b *Bot) registerCommands() {
 		Name:        "remove",
 		Description: "Remove a feed",
 		Handler:     b.handleRemoveCommand,
+		GuildID:     b.config.DiscordGuildId,
+	})
+	_ = b.parser.AddCommand(&switchboard.Command{
+		Name:        "pause",
+		Description: "Pause a feed from posting new items",
+		Handler:     b.handlePauseCommand,
+		GuildID:     b.config.DiscordGuildId,
+	})
+	_ = b.parser.AddCommand(&switchboard.Command{
+		Name:        "unpause",
+		Description: "Resume a paused feed",
+		Handler:     b.handleUnpauseCommand,
 		GuildID:     b.config.DiscordGuildId,
 	})
 }

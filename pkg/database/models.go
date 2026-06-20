@@ -15,6 +15,7 @@ type Feed struct {
 	Url         string
 	FeedUrl     string
 	ChannelID   sql.NullString
+	PausedUntil sql.NullTime
 }
 
 type Post struct {
