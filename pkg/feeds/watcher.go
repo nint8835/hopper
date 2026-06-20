@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -33,10 +32,6 @@ type FeedWatcher struct {
 	watcherCtx    context.Context
 	stopWatcher   context.CancelFunc
 	stoppedChan   chan struct{}
-
-	// refreshMu serializes refresh passes so the scheduled ticker and manual
-	// refresh invocations don't race on the (feed_id, post_guid) primary key.
-	refreshMu sync.Mutex
 }
 
 func (f *FeedWatcher) postItem(ctx context.Context, feed database.Feed, item *gofeed.Item) (string, error) {
@@ -134,9 +129,6 @@ func (f *FeedWatcher) postItem(ctx context.Context, feed database.Feed, item *go
 const refreshFeedTimeout = 2 * time.Minute
 
 func (f *FeedWatcher) RefreshFeed(ctx context.Context, feed database.Feed, isBackfill bool) error {
-	f.refreshMu.Lock()
-	defer f.refreshMu.Unlock()
-
 	ctx, cancel := context.WithTimeout(ctx, refreshFeedTimeout)
 	defer cancel()
 
